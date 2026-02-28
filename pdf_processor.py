@@ -1,5 +1,6 @@
 import os
 from pypdf import PdfReader, PdfWriter
+from pypdf.generic import RectangleObject
 import copy
 
 def process_pdf(input_path, output_path):
@@ -19,32 +20,34 @@ def process_pdf(input_path, output_path):
         writer = PdfWriter()
 
         if reader.is_encrypted:
-            # We don't support encrypted PDFs in this simple version
             return False
 
         for page in reader.pages:
-            # Get original bounds
+            # Original bounds
             mb = page.mediabox
-            width = mb.width
-            height = mb.height
-            mid_x = mb.left + (width / 2)
+            width = float(mb.width)
+            height = float(mb.height)
+            left = float(mb.left)
+            bottom = float(mb.bottom)
+            mid_x = left + (width / 2)
 
-            # Left Page
-            # We must use a copy or similar approach as we manipulate the mediabox
-            # In pypdf, we can add the same page twice and crop each
+            # Define the two halves
+            left_rect = RectangleObject((left, bottom, mid_x, bottom + height))
+            right_rect = RectangleObject((mid_x, bottom, left + width, bottom + height))
 
             # Left Half
             left_page = copy.copy(page)
-            left_page.mediabox.right = mid_x
+            left_page.mediabox = left_rect
+            left_page.cropbox = left_rect
             writer.add_page(left_page)
 
             # Right Half
             right_page = copy.copy(page)
-            right_page.mediabox.left = mid_x
+            right_page.mediabox = right_rect
+            right_page.cropbox = right_rect
             writer.add_page(right_page)
 
         # Apply basic compression
-        # pypdf can compress content streams
         for page in writer.pages:
             page.compress_content_streams()
 
