@@ -1,6 +1,6 @@
 # 📖 Automated PDF Splitter & Compressor Telegram Bot
 
-A specialized Telegram Bot designed to process "two-up" PDF documents (where two physical pages appear on a single digital landscape page). It automatically bisects each page and applies stream-level compression.
+A specialized Telegram Bot designed to process "two-up" PDF documents. Optimized for **Pure Python** environments like **Termux (Android)**, making it highly portable and easy to install.
 
 ---
 
@@ -8,7 +8,7 @@ A specialized Telegram Bot designed to process "two-up" PDF documents (where two
 
 - **Vertical Bisection:** Automatically splits landscape pages exactly down the middle.
 - **Sequential Ordering:** Ensures logical flow (Page 1 Left → Page 1 Right → Page 2 Left...).
-- **Aggressive Compression:** Optimizes output by removing redundant objects and compressing streams.
+- **Pure Python:** Uses `pypdf`, requiring zero C++ compilers or system-level dependencies.
 - **Privacy-First:** Strict "clean as you go" policy for the server’s file system.
 
 ---
@@ -16,7 +16,7 @@ A specialized Telegram Bot designed to process "two-up" PDF documents (where two
 ## 🛠️ Requirements
 
 - **Python 3.10+**
-- **PyMuPDF (fitz):** For high-performance PDF manipulation.
+- **pypdf:** For Pure Python PDF manipulation.
 - **python-telegram-bot (v20+):** For asynchronous bot interactions.
 - **python-dotenv:** For managing environment variables.
 
@@ -48,11 +48,20 @@ python bot.py
 
 ---
 
+## 📱 Termux Installation (Android)
+This bot is designed to work out-of-the-box in Termux:
+```bash
+pkg update && pkg upgrade
+pkg install python
+pip install -r requirements.txt
+python bot.py
+```
+
+---
+
 ## 🔧 Deployment
+For production, it is recommended to use a process manager like **PM2**.
 
-For production, it is recommended to use a process manager like **PM2** or a **systemd** service.
-
-### Example with PM2:
 ```bash
 pm2 start bot.py --name "pdf-splitter-bot" --interpreter python3
 ```
@@ -60,9 +69,8 @@ pm2 start bot.py --name "pdf-splitter-bot" --interpreter python3
 ---
 
 ## 🛡️ Limitations
-
-- **File Size:** The bot can handle PDFs up to **20MB** due to Telegram Bot API download limits.
-- **Encryption:** Password-protected or encrypted PDFs cannot be processed.
+- **File Size:** The bot can handle PDFs up to **20MB** (Telegram Bot API download limit).
+- **Encryption:** Password-protected PDFs cannot be processed.
 
 ---
 
