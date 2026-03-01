@@ -58,28 +58,28 @@ def process_pdf(input_path, output_path, page_range=None, output_format="pdf"):
 
             width = ur_x - ll_x
             height = ur_y - ll_y
-            mid_x = ll_x + (width / 2)
 
-            # Define split rectangles
-            left_rect = RectangleObject((ll_x, ll_y, mid_x, ur_y))
-            right_rect = RectangleObject((mid_x, ll_y, ur_x, ur_y))
+            # Determine number of splits based on aspect ratio
+            aspect_ratio = width / height if height > 0 else 0
+            num_splits = 4 if aspect_ratio > 2.1 else 2
 
-            # Left Half
-            lp = copy.copy(page)
-            lp.mediabox = left_rect
-            lp.cropbox = left_rect
-            # Purge secondary boxes to prevent viewer overrides
-            for box in ['/ArtBox', '/BleedBox', '/TrimBox']:
-                if box in lp: lp.pop(box)
-            split_writer.add_page(lp)
+            segment_width = width / num_splits
 
-            # Right Half
-            rp = copy.copy(page)
-            rp.mediabox = right_rect
-            rp.cropbox = right_rect
-            for box in ['/ArtBox', '/BleedBox', '/TrimBox']:
-                if box in rp: rp.pop(box)
-            split_writer.add_page(rp)
+            for j in range(num_splits):
+                segment_ll_x = ll_x + (j * segment_width)
+                segment_ur_x = segment_ll_x + segment_width
+
+                segment_rect = RectangleObject((segment_ll_x, ll_y, segment_ur_x, ur_y))
+
+                sub_page = copy.copy(page)
+                sub_page.mediabox = segment_rect
+                sub_page.cropbox = segment_rect
+
+                # Purge secondary boxes to prevent viewer overrides
+                for box in ['/ArtBox', '/BleedBox', '/TrimBox']:
+                    if box in sub_page: sub_page.pop(box)
+
+                split_writer.add_page(sub_page)
 
         for page in split_writer.pages:
             page.compress_content_streams()
