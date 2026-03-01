@@ -20,6 +20,7 @@ logger = logging.getLogger(__name__)
 
 # User settings (in-memory for now, resets on bot restart)
 user_settings = {} # {user_id: {"format": "pdf"}}
+cancel_flags = {} # {user_id: bool}
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """
@@ -62,6 +63,18 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id = update.effective_user.id
     data = query.data
 
+    if data == "cancel_process":
+        cancel_flags[user_id] = True
+        
+        # Also clean up pending_pdf
+        if 'pending_pdf' in context.user_data:
+            del context.user_data['pending_pdf']
+        if 'pdf_name' in context.user_data:
+            del context.user_data['pdf_name']
+            
+        await query.edit_message_text("🚫 Process canceled. Send a new PDF to start over.")
+        return
+
     if user_id not in user_settings:
         user_settings[user_id] = {"format": "pdf"}
 
@@ -102,9 +115,14 @@ async def handle_document(update: Update, context: ContextTypes.DEFAULT_TYPE):
     context.user_data['pending_pdf'] = document.file_id
     context.user_data['pdf_name'] = document.file_name
 
+    cancel_flags[update.effective_user.id] = False
+    keyboard = [[InlineKeyboardButton("❌ Cancel", callback_data="cancel_process")]]
+    reply_markup = InlineKeyboardMarkup(keyboard)
+
     await update.message.reply_text(
         "📝 PDF received! Now, specify the page range you want to process (e.g., '1-5, 7, 10-12').\n\n"
-        "👉 Send **'all'** to process the entire document."
+        "👉 Send **'all'** to process the entire document.",
+        reply_markup=reply_markup
     )
 
 async def handle_page_range(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -121,9 +139,12 @@ async def handle_page_range(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     page_range = None if page_range_text == "all" else page_range_text
 
-    status_msg = await update.message.reply_text("📥 Downloading and processing your PDF... Please wait.")
-
     user_id = update.effective_user.id
+    cancel_flags[user_id] = False
+    keyboard = [[InlineKeyboardButton("❌ Cancel", callback_data="cancel_process")]]
+    reply_markup = InlineKeyboardMarkup(keyboard)
+
+    status_msg = await update.message.reply_text("📥 Downloading and processing your PDF... Please wait.", reply_markup=reply_markup)
     # Ensure temporary filenames are unique and cleaned up
     import uuid
     uid = str(uuid.uuid4())[:8]
@@ -140,10 +161,12 @@ async def handle_page_range(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
         # Process the PDF in a separate thread
         success, result_path = await asyncio.to_thread(
-            process_pdf, input_filename, output_filename, page_range, output_format
+            process_pdf, input_filename, output_filename, page_range, output_format, lambda: cancel_flags.get(user_id, False)
         )
 
-        if success:
+        if cancel_flags.get(user_id, False):
+            pass
+        elif success:
             with open(result_path, 'rb') as f:
                 if output_format == "pdf":
                     await update.message.reply_document(
@@ -166,12 +189,14 @@ async def handle_page_range(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     finally:
         # Clean up files
-        for f in [input_filename, output_filename, output_filename.replace(".pdf", ".zip")]:
+        for f in [input_filename, output_filename, output_filename.replace(".pdf", ".zip"), f"{output_filename}_tmp.pdf"]:
             if os.path.exists(f):
                 try: os.remove(f)
                 except: pass
-        try: await status_msg.delete()
-        except: pass
+        if not cancel_flags.get(user_id, False):
+            try: await status_msg.delete()
+            except: pass
+        cancel_flags.pop(user_id, None)
 
 def main():
     if not TOKEN:

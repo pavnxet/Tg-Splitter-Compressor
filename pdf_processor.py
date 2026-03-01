@@ -5,7 +5,7 @@ from pypdf import PdfReader, PdfWriter
 from pypdf.generic import RectangleObject
 from pdf2image import convert_from_path
 
-def process_pdf(input_path, output_path, page_range=None, output_format="pdf"):
+def process_pdf(input_path, output_path, page_range=None, output_format="pdf", is_cancelled=lambda: False):
     """
     Split each page of the PDF into two vertical halves using pypdf.
     Robust handling of offsets and secondary boxes.
@@ -45,6 +45,8 @@ def process_pdf(input_path, output_path, page_range=None, output_format="pdf"):
 
         split_writer = PdfWriter()
         for i in target_indices:
+            if is_cancelled():
+                return False, "Cancelled by user"
             page = reader.pages[i]
 
             # Determine the effective boundary for splitting
@@ -99,6 +101,8 @@ def process_pdf(input_path, output_path, page_range=None, output_format="pdf"):
                 zip_filename = output_path.replace(".pdf", ".zip")
                 with zipfile.ZipFile(zip_filename, 'w') as zipf:
                     for idx, img in enumerate(images):
+                        if is_cancelled():
+                            return False, "Cancelled by user"
                         img_name = f"page_{idx+1:03d}.jpg"
                         img.save(img_name, "JPEG", quality=85)
                         zipf.write(img_name)
