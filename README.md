@@ -9,6 +9,7 @@ A specialized Telegram Bot designed to process "two-up" PDF documents. Optimized
 - **Vertical Bisection:** Automatically splits landscape pages exactly down the middle.
 - **Page Selection:** Extract and process specific page ranges (e.g., `1-5, 7, 10-12`).
 - **Multiple Formats:** Choose output as optimized **PDF** or a **ZIP of JPEGs**.
+- **Process Cancellation:** Easily cancel on-hold or running processes to reset state and clean up immediately.
 - **Pure Python:** Highly portable, minimal system-level dependencies.
 - **Privacy-First:** Strict "clean as you go" policy for the server’s file system.
 
@@ -54,10 +55,11 @@ python bot.py
 ## 🎮 How to Use
 
 1. Send a PDF file to the bot.
-2. The bot will ask for a **page range**.
+2. The bot will ask for a **page range**. You can click the **❌ Cancel** button to abort at this stage.
    - Send `all` to process the entire document.
    - Send a range like `1-10` or `1, 3, 5-7`.
-3. Use **/settings** to toggle between PDF or Image output.
+3. While the bot is downloading or processing the PDF, you can also click the **❌ Cancel** button to stop it.
+4. Use **/settings** to toggle between PDF or Image output.
 
 ---
 
