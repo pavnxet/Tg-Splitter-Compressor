@@ -1,5 +1,6 @@
 import os
 import logging
+import asyncio
 from dotenv import load_dotenv
 from telegram import Update
 from telegram.ext import ApplicationBuilder, CommandHandler, MessageHandler, filters, ContextTypes
@@ -14,6 +15,8 @@ logging.basicConfig(
     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
     level=logging.INFO
 )
+# Set a higher log level for httpx to avoid spamming logs unless there are issues
+logging.getLogger("httpx").setLevel(logging.WARNING)
 logger = logging.getLogger(__name__)
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -62,8 +65,9 @@ async def handle_document(update: Update, context: ContextTypes.DEFAULT_TYPE):
         file_obj = await document.get_file()
         await file_obj.download_to_drive(input_filename)
 
-        # Process the PDF
-        success = process_pdf(input_filename, output_filename)
+        # Process the PDF in a separate thread to avoid blocking the event loop
+        # This prevents "Timed out" errors during CPU-intensive tasks
+        success = await asyncio.to_thread(process_pdf, input_filename, output_filename)
 
         if success:
             # Send the processed PDF back
@@ -76,6 +80,9 @@ async def handle_document(update: Update, context: ContextTypes.DEFAULT_TYPE):
         else:
             await update.message.reply_text("❌ Failed to process the PDF. It might be encrypted, password-protected, or corrupted.")
 
+    except asyncio.TimeoutError:
+        logger.error("Timeout occurred while processing document.")
+        await update.message.reply_text("🛑 Processing took too long. The file might be too complex.")
     except Exception as e:
         logger.error(f"Error handling document: {e}")
         await update.message.reply_text("🛑 An unexpected error occurred while processing your file.")
@@ -104,7 +111,8 @@ def main():
         print("Error: TELEGRAM_BOT_TOKEN is missing. Please check your .env file.")
         return
 
-    application = ApplicationBuilder().token(TOKEN).build()
+    # Increased timeouts for more stable file handling on slower connections
+    application = ApplicationBuilder().token(TOKEN).read_timeout(30).write_timeout(30).connect_timeout(30).build()
 
     # Add handlers
     application.add_handler(CommandHandler("start", start))
