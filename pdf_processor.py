@@ -1,29 +1,56 @@
 import os
+import copy
+import zipfile
 from pypdf import PdfReader, PdfWriter
 from pypdf.generic import RectangleObject
-import copy
+from pdf2image import convert_from_path
 
-def process_pdf(input_path, output_path):
+def process_pdf(input_path, output_path, page_range=None, output_format="pdf"):
     """
     Split each page of the PDF into two vertical halves using pypdf.
-    Optimized for Termux (Pure Python).
 
     Args:
         input_path (str): Path to the source PDF.
         output_path (str): Path to save the processed PDF.
+        page_range (str): Optional string range like "1-5", "1,3,5", or "1-5,7".
+        output_format (str): "pdf" or "images".
 
     Returns:
-        bool: True if successful, False otherwise.
+        tuple: (bool, str) - Success status and path to the resulting file.
     """
     try:
         reader = PdfReader(input_path)
-        writer = PdfWriter()
 
         if reader.is_encrypted:
-            return False
+            return False, "PDF is encrypted."
 
-        for page in reader.pages:
-            # Original bounds
+        # Parse page range
+        total_pages = len(reader.pages)
+        target_indices = []
+        if page_range:
+            try:
+                # Basic range parser: handles "1-3, 5, 7-10"
+                for part in page_range.replace(" ", "").split(','):
+                    if '-' in part:
+                        start, end = map(int, part.split('-'))
+                        target_indices.extend(range(start - 1, end))
+                    else:
+                        target_indices.append(int(part) - 1)
+
+                # Filter and deduplicate indices
+                target_indices = sorted(list(set([p for p in target_indices if 0 <= p < total_pages])))
+            except Exception as e:
+                return False, f"Invalid page range format: {str(e)}"
+        else:
+            target_indices = list(range(total_pages))
+
+        if not target_indices:
+            return False, "No valid pages found in selected range."
+
+        # Process pages into a split PDF first
+        split_writer = PdfWriter()
+        for i in target_indices:
+            page = reader.pages[i]
             mb = page.mediabox
             width = float(mb.width)
             height = float(mb.height)
@@ -31,34 +58,59 @@ def process_pdf(input_path, output_path):
             bottom = float(mb.bottom)
             mid_x = left + (width / 2)
 
-            # Define the two halves
             left_rect = RectangleObject((left, bottom, mid_x, bottom + height))
             right_rect = RectangleObject((mid_x, bottom, left + width, bottom + height))
 
             # Left Half
-            left_page = copy.copy(page)
-            left_page.mediabox = left_rect
-            left_page.cropbox = left_rect
-            writer.add_page(left_page)
+            lp = copy.copy(page)
+            lp.mediabox = left_rect
+            lp.cropbox = left_rect
+            split_writer.add_page(lp)
 
             # Right Half
-            right_page = copy.copy(page)
-            right_page.mediabox = right_rect
-            right_page.cropbox = right_rect
-            writer.add_page(right_page)
+            rp = copy.copy(page)
+            rp.mediabox = right_rect
+            rp.cropbox = right_rect
+            split_writer.add_page(rp)
 
         # Apply basic compression
-        for page in writer.pages:
+        for page in split_writer.pages:
             page.compress_content_streams()
 
-        # Save the result
-        with open(output_path, "wb") as f:
-            writer.write(f)
+        # Handle output formats
+        if output_format == "pdf":
+            with open(output_path, "wb") as f:
+                split_writer.write(f)
+            return True, output_path
 
-        return True
+        elif output_format == "images":
+            temp_pdf_path = f"{output_path}_split_temp.pdf"
+            with open(temp_pdf_path, "wb") as f:
+                split_writer.write(f)
+
+            try:
+                # Convert PDF pages to JPEGs
+                images = convert_from_path(temp_pdf_path)
+                zip_filename = output_path.replace(".pdf", ".zip")
+
+                with zipfile.ZipFile(zip_filename, 'w') as zipf:
+                    for idx, img in enumerate(images):
+                        img_name = f"page_{idx+1:03d}.jpg"
+                        img.save(img_name, "JPEG", quality=85)
+                        zipf.write(img_name)
+                        os.remove(img_name)
+
+                os.remove(temp_pdf_path)
+                return True, zip_filename
+            except Exception as e:
+                if os.path.exists(temp_pdf_path): os.remove(temp_pdf_path)
+                return False, f"Failed to convert PDF to images: {str(e)}"
+
+        return False, "Unsupported output format."
+
     except Exception as e:
-        print(f"Error processing PDF with pypdf: {e}")
-        return False
+        print(f"Error in process_pdf: {e}")
+        return False, str(e)
 
 if __name__ == "__main__":
     import sys
