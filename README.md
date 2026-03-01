@@ -1,5 +1,7 @@
 # 📖 Automated PDF Splitter & Compressor Telegram Bot
 
+![Success](https://img.shields.io/badge/Status-Success-brightgreen?style=for-the-badge&logo=checkmarx)
+
 A specialized Telegram Bot designed to process "two-up" PDF documents. Optimized for **Pure Python** environments like **Termux (Android)**.
 
 ---
